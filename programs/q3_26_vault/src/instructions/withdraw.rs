@@ -32,6 +32,11 @@ impl<'info> Withdraw<'info> {
     pub fn withdraw(&mut self, amount: u64) -> Result<()> {
         require!(amount > 0, ErrorCode::InvalidAmount);
 
+        let user_key = self.user.key();
+        let vault_bump = self.vault_state.vault_bump;
+
+        let signer_seeds: &[&[&[u8]]] = &[&[VAULT_SEED, user_key.as_ref(), &[vault_bump]]];
+
         let cpi_program = self.system_program.key();
 
         let cpi_accounts = Transfer {
@@ -39,7 +44,7 @@ impl<'info> Withdraw<'info> {
             to: self.user.to_account_info(),
         };
 
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
 
         transfer(cpi_ctx, amount)
     }

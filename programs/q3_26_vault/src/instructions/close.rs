@@ -1,6 +1,5 @@
 use crate::{
     constants::{STATE, VAULT_SEED},
-    error::ErrorCode,
     state::VaultState,
 };
 use anchor_lang::{
@@ -14,6 +13,8 @@ pub struct Close<'info> {
     pub user: Signer<'info>,
 
     #[account(
+        mut,
+        close = user,
         seeds = [STATE, user.key().as_ref()],
         bump = vault_state.state_bump
     )]
@@ -25,22 +26,29 @@ pub struct Close<'info> {
         bump = vault_state.vault_bump
     )]
     pub vault: SystemAccount<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
 impl<'info> Close<'info> {
     pub fn close(&mut self) -> Result<()> {
-        
-        let cpi_program = self.system_program.key();
+        let user_key = self.user.key();
+        let vault_bump = self.vault_state.vault_bump;
+
+        let signer_seeds: &[&[&[u8]]] = &[&[VAULT_SEED, user_key.as_ref(), &[vault_bump]]];
 
         let cpi_accounts = Transfer {
             from: self.vault.to_account_info(),
             to: self.user.to_account_info(),
         };
 
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        let cpi_ctx =
+            CpiContext::new_with_signer(self.system_program.key(), cpi_accounts, signer_seeds);
 
         let amount = self.vault.lamports();
-        transfer(cpi_ctx, amount)
+
+        transfer(cpi_ctx, amount)?;
+
+        Ok(())
     }
 }
